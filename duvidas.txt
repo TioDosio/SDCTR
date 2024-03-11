@@ -1,0 +1,84 @@
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+// VER PORQUE É QUE SE METER A VARIAVEL NAO DÁ MAS 11 DÁ
+
+- ver power_max e mandar alfa fazer pratico no LED
+
+- Meter D no PID mas a 0
+
+- Debug can bus porque o do meio não funciona
+
+- delay é 10 - jitter
+
+- Mensagens Can-Bus
+
+- Fazer jitter slide 7  h-10
+
+- verificação de parametros interface
+
+- testar interface
+
+- LUX measurement
+    -Good (should do): The function takes repetitive measures to filter the noise present
+    in the individual measurements.
+
+- LED driver
+    - Good (should do): Implement functions that allow for specification of the LED
+    dimming in different formats (e.g. duty cycle, percentage, PWM range, etc).
+
+- System Identification ???
+    - Sufficient (must do): Implement a function that computes the static gains of the
+    system at initialisation.
+
+- Luminaire PID controller
+    - Good (should do): The controller should be robust to external disturbances and
+    tuned to have dynamical characteristics compatible with the requirements. Perform
+    experiments showing that your controller is improved with respect to a baseline solution.
+
+- Can-Bus communication protocol
+    - Montar e Copiar código
+
+Embedded Concurrent Programming
+    - Sufficient (must do): Implement a concurrent application on the microcontroller
+    with a control task, a Can-Bus communication task, a PC to Can-Bus message
+    routing mechanism (hub function), and a user interaction task. The concurrent
+    application must be of the non-blocking type, so no task can prevent other tasks
+    from executing.
+
+
+
+notas:
+
+Simulate system X = G*u + d
+
+calibration of H and tao once
+
+Para que serve o tao?
+
+2stage:
+
+- hub is the pico that receives the messages and that pico messages to the others
+
+- distributed control: consesssus algoritm
+
+- extra commands on the interface
+
+- Communication between picos
+
+- Network Wake-up
+    - Tell the other picos that the pico is on
+- Each pico needs to know his influence lux on the other picos
+
+Gama = G*u +o
+
+Gama -> 3*1
+G -> 3x3
+u -> 3*1
+o -> 3*1
+
+- Gama on some desk = Sum(Gij*ui) +oi
+
+- each pico only needs a 3*1 gain 1 needs [k11 k12 k13]
+
+- turn all off if i need to compute the gain
+
+- 
