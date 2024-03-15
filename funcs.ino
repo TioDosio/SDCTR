@@ -1,5 +1,3 @@
-int debugger = 1;
-int n = 2;
 double sum_visibility_error = 0, sum_flicker = 0, mean_flicker = 0, mean_visibility = 0, counter = 0;
 struct info
 {
@@ -10,51 +8,77 @@ const int bufferSize = 6000;
 info circularBuffer[bufferSize];
 int currentIndex = 0;
 
-// Convert from adc value to lux
+/*
+ * Function to compute the illuminance from the LDR sensor
+ * @param adc_value: the value read from the ADC
+ * @return the illuminance in lux
+ */
 double dac_lux(float adc_value)
 {
     double R_LDR = R * (DAC_RANGE / ((double)adc_value) - 1); // Convert from adc valu to resistance  V_ADC = adc_value / DAC_RANGE * VCC; R_LDR = VCC / V_ADC * R - R
     return pow(10, (log10(R_LDR) - b) / m);                   // Convert from resistance to lux
 }
+/*
+ * Function to compute the volts from Lux
+ * @param lux: the illuminance in lux
+ * @param b: the y-intercept of the LDR sensor
+ * @param m: the slope of the LDR sensor
+ * @param vcc: the voltage of the LDR sensor
+ * @return the voltage
+ */
 float lux_volt(float lux, float b, float m, float vcc)
 {
     float resistance = pow(10, (m * log10(lux) + b));
     return (vcc * 10000.0) / (resistance + 10000.0);
 }
 
-float volt_lux(float volt, float m, float b, float vcc)
-{
-    float resistance = ((vcc * 10000.0) / volt) - 10000.0;
-    return pow(10, ((log10(resistance) - b) / m));
-}
-
+/*
+ * Function to calibrate the LDR sensor
+ * @return the gain of the LDR sensor
+ */
 double calibration()
 {
     analogWrite(LED_PIN, 0);
-    delay(4000);
-    external_lux = dac_lux(analogRead(ADC_PIN));
+    delay(2000);
+    float external_lux = dac_lux(analogRead(ADC_PIN));
     delay(1000);
     analogWrite(LED_PIN, 4095);
-    delay(4000);
+    delay(2000);
     float y_max = dac_lux(analogRead(ADC_PIN));
-    return (y_max - external_lux);
+    return (y_max - external_lux) / 1-0; // nao da
 }
 
+/*
+ * Function to compute the power consumption of the luminaire
+ * @return the power consumption in watts
+ */
 float imediate_power_cons()
 {
     return (power_max * duty_cycle);
 }
-
+/*
+ * Function to compute the time since the last restart
+ * @return the time in seconds
+ */
 float time_since_restart()
 {
     return (millis() / 1000);
 }
-
+/*
+ * Function to compute the average energy consumption of the luminaire
+ * @return the energy consumption in joules
+ */
 float average_energy_consumption(int desk) // do it in joule
 {
     energy += power_max * duty_cycle * (run_time - run_init) * pow(10, -6);
     return energy;
 }
+/*
+ *   Function to compute the average visibility error
+ * @param r: illuminance reference in lux
+ * @param y: illuminance measured in lux
+ *
+ */
 void average_visibility_error(float r, float y) // accumulated visibility error in lux.
 {
     double aux = r - y;
@@ -65,6 +89,9 @@ void average_visibility_error(float r, float y) // accumulated visibility error 
     sum_visibility_error += aux;
     mean_visibility = sum_visibility_error / counter;
 }
+/*
+ *   Function to compute the average flicker error
+ */
 void average_flicker_error() // accumulated flicker error in Hz (s^-1)
 {
     int aux1, aux2;
@@ -92,7 +119,10 @@ void average_flicker_error() // accumulated flicker error in Hz (s^-1)
     mean_flicker = f / counter;
     counter++;
 }
-
+/*
+ * Function to compute the mean illuminance of the last 10 samples
+ * @return the mean illuminance in lux
+ */
 float mean_lux()
 {
     int startIdx = (currentIndex - 10 + bufferSize) % bufferSize;
@@ -105,17 +135,24 @@ float mean_lux()
     }
     return sum / 10.0;
 }
-
+/*
+ * Function to save the illuminance to the buffer
+ */
 void saveToBuffer_lux(double val)
 {
     circularBuffer[currentIndex].lux = val;
 }
+/*
+ * Function to save the duty cycle to the buffer
+ */
 void saveToBuffer_dc(double val)
 {
     circularBuffer[currentIndex].lux = val;
     currentIndex = (currentIndex + 1) % bufferSize;
 }
-
+/*
+ * Function to print the buffer
+ */
 void printBuffer(char c)
 {
     Serial.println("Buffer Contents:");
@@ -137,20 +174,21 @@ void printBuffer(char c)
     }
     Serial.println();
 }
-
+/*
+ * Function to process the commands received from the serial port
+ * @param command: the command received from the serial port
+ */
 void processCommand(const String &command)
 {
-    // Set duty cycle command
-    int i = Led;
+    int i = Led; // desk number (just one desk for now) Led = 1
     float val;
     char x;
     double time;
-    float vals[100];
 
     if (command.startsWith("d ")) // Set directly the duty cycle of luminaire i.
     {
         sscanf(command.c_str(), "d %d %f", &i, &val);
-        if (i == Led and val >= 0 and val <= 1) // If the command is for the current luminaire
+        if (i == Led and val >= 0 and val <= 1) // não dá
         {
             duty_cycle = val;
             Serial.println("ack");
@@ -167,6 +205,7 @@ void processCommand(const String &command)
         {
             Serial.print("d ");
             Serial.print(i);
+            Serial.print(" ");
             Serial.println(duty_cycle);
         }
         else
@@ -180,6 +219,9 @@ void processCommand(const String &command)
         if (i == Led and val >= 0)
         {
             r = val;
+            B = 1 / (K * ganho * (lux_volt(r, b, m, vcc) / r));
+            float resistance = pow(10, (m * log10(r) + b));
+            Ti = 10e-6 * ((10000 * resistance) / (10000 + resistance));
             Serial.println("ack");
         }
         else
@@ -194,6 +236,7 @@ void processCommand(const String &command)
         {
             Serial.print("r ");
             Serial.print(i);
+            Serial.print(" ");
             Serial.println(r);
         }
         else
@@ -208,6 +251,7 @@ void processCommand(const String &command)
         {
             Serial.print("l ");
             Serial.print(i);
+            Serial.print(" ");
             Serial.println(y);
         }
         else
@@ -235,6 +279,7 @@ void processCommand(const String &command)
         {
             Serial.print("o ");
             Serial.print(i);
+            Serial.print(" ");
             Serial.println(occupied);
         }
         else
@@ -304,10 +349,14 @@ void processCommand(const String &command)
         sscanf(command.c_str(), "g x %d", &i);
         if (i == Led)
         {
+            float ext = y - ganho * duty_cycle;
+            if (ext <0){
+              ext = 0;
+            }
             Serial.print("x ");
             Serial.print(i);
             Serial.print(" ");
-            Serial.println(external_lux);
+            Serial.println(ext);
         }
         else
         {
@@ -389,7 +438,7 @@ void processCommand(const String &command)
             Serial.print(" ");
             printBuffer('l');
         }
-        else if (i == Led and x == 'd')
+        else if (i == Led and x == 'd') // nao da
         {
             Serial.print("b ");
             Serial.print(x);
@@ -404,7 +453,7 @@ void processCommand(const String &command)
     }
     else if (command.startsWith("g e ")) // Get the average energy consumption at the desk <i> since the last system restart.
     {
-        sscanf(command.c_str(), "g e %d", &i);
+        sscanf(command.c_str(), "g e %d", &i); // nao da
         if (i == Led)
         {
             Serial.print("e ");
@@ -424,104 +473,24 @@ void processCommand(const String &command)
         Serial.print("v ");
         Serial.print(i);
         Serial.print(" ");
-        Serial.println(val);
+        Serial.println(mean_visibility);
     }
     else if (command.startsWith("g f ")) // Get the average flicker error on desk <i> since the last system restart.
     {
-        sscanf(command.c_str(), "g f %d", &i);
+        sscanf(command.c_str(), "g f %d", &i); // nao da
 
         Serial.print("f ");
         Serial.print(i);
         Serial.print(" ");
-        Serial.println(val);
+        Serial.println(mean_flicker);
     }
-    else if (command.startsWith("g mudar "))
+    else if (command.startsWith("mudar "))
     {
-        sscanf(command.c_str(), "g mudar %d", &i);
-        if (i == Led)
-        {
-            Serial.print("mudar ");
-            Serial.print(i);
-            Serial.print(" ");
-            Serial.print(val);
-            Serial.print(" ");
-            Serial.println(time);
-        }
-        else
-        {
-            Serial.println("err");
-        }
-    }
-    else if (command.startsWith("g mudar "))
-    {
-        sscanf(command.c_str(), "g mudar %d", &i);
-        if (i == Led)
-        {
-            Serial.print("mudar ");
-            Serial.print(i);
-            Serial.print(" ");
-            Serial.print(val);
-            Serial.print(" ");
-            Serial.println(time);
-        }
-        else
-        {
-            Serial.println("err");
-        }
-    }
-    else if (command.startsWith("g mudar "))
-    {
-        sscanf(command.c_str(), "g mudar %d", &i);
-        if (i == Led)
-        {
-            Serial.print("mudar ");
-            Serial.print(i);
-            Serial.print(" ");
-            Serial.print(val);
-            Serial.print(" ");
-            Serial.println(time);
-        }
-        else
-        {
-            Serial.println("err");
-        }
-    }
-    else if (command.startsWith("g mudar "))
-    {
-        sscanf(command.c_str(), "g mudar %d", &i);
-        if (i == Led)
-        {
-            Serial.print("mudar ");
-            Serial.print(i);
-            Serial.print(" ");
-            Serial.print(val);
-            Serial.print(" ");
-            Serial.println(time);
-        }
-        else
-        {
-            Serial.println("err");
-        }
-    }
-    else if (command.startsWith("g mudar "))
-    {
-        sscanf(command.c_str(), "g mudar %d", &i);
-        if (i == Led)
-        {
-            Serial.print("mudar ");
-            Serial.print(i);
-            Serial.print(" ");
-            Serial.print(val);
-            Serial.print(" ");
-            Serial.println(time);
-        }
-        else
-        {
-            Serial.println("err");
-        }
+        sscanf(command.c_str(), "mudar %f", &K);
+        B = 1 / (K * ganho * (lux_volt(r, b, m, vcc) / r));
     }
     else
     {
-        Serial.println("err");
+        Serial.println("err"); // Command not recognized
     }
 }

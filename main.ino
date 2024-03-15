@@ -1,25 +1,25 @@
 #include "pid.h"
 
-const float m = -0.8, b = 6.15, h = 0.01;
+float K = 15, B, Ti, Td = 0;
+const float m = -0.8, b = 6, h = 0.01;
 const int LED_PIN = 15, ADC_PIN = A0, DAC_RANGE = 4096, R = 10e3;
-pid my_pid{h, 100, 0.1, 2};                        // Create a pid controller // pid my_pid{10, 3, 10, 7};
+pid my_pid{h, K, B, Ti};                           // Create a pid controller
 unsigned long previousTime = 0, sampInterval = 10; // milliseconds
-double box_light, duty_cycle = 0;
-int Led = 1;
-float y = 0, u = 0, r{10}, external_lux = 0, run_time = 0, run_init = 0, energy = 0, power_max = ((0.28 * 0.28) / 47) + 100e-3, vcc = 3.3; // P = V^2 / R = 0.28^2 / 47
-int occupied = 1, anti_windup = 1, feedback = 1, flag_stream_lux = 1, flag_stream_duty_c = 0;
-
+double ganho, duty_cycle = 0;
+float H = 0, y = 0, u = 0, r{10}, run_time = 0, run_init = 0, energy = 0, power_max = ((0.29 * 0.29) / 47) + (0.29 * 2.63), vcc = 3.3;
+int occupied = 1, anti_windup = 1, feedback = 1, flag_stream_lux = 0, flag_stream_duty_c = 0, Led = 1;
 void setup()
 {
   analogReadResolution(12);
   analogWriteFreq(30000); // 30KHz
-  analogWriteRange(4095); // Max PWM
+  analogWriteRange(4095); // Max PWM // pid*4095  
   Serial.begin();
 
-  box_light = calibration();
-  Serial.print("Calibration Completed, box light= ");
-  Serial.println(box_light);
-  delay(1000);
+  ganho = calibration();
+  Serial.print("Calibration Completed, gain = ");
+  Serial.println(ganho);
+  float resistance = pow(10, (m * log10(r) + b));
+  Ti = 10e-6 * ((10000 * resistance) / (10000 + resistance));
 }
 
 void loop()
@@ -32,32 +32,29 @@ void loop()
       String command = Serial.readStringUntil('\n');
       processCommand(command);
     }
-    if (occupied == 1 and r < 2)
+    /*if (occupied == 1 and r < 2) // meter bem
     {
       r = 15;
     }
     else if (occupied == 0 and r >= 8)
     {
       r = 5;
-    }
-    float adc_value = analogRead(ADC_PIN);
-    y = dac_lux(adc_value);
-    saveToBuffer_lux(y);
+    }*/
+    float adc_value = analogRead(ADC_PIN);                                                                              // read adc value
+    y = dac_lux(adc_value);                                                                                             // convert adc value to lux
+    saveToBuffer_lux(y);                                                                                                // save lux value to buffer
+    u = my_pid.compute_control(K, B, Ti*0.5, Td, lux_volt(r, b, m, vcc), lux_volt(y, b, m, vcc), anti_windup, h, feedback); // compute control
+    u *= 4095;
+    duty_cycle = u / DAC_RANGE;
+    saveToBuffer_dc(duty_cycle); // save duty cycle value to buffer
+    int pwm = (int)u;
+    analogWrite(LED_PIN, pwm); // write pwm value to led
     if (feedback == 1)
     {
-      u = my_pid.compute_control(lux_volt(r, b, m, vcc), lux_volt(mean_lux(), b, m, vcc), anti_windup, h);
+      my_pid.housekeep(lux_volt(r, b, m, vcc), lux_volt(y, b, m, vcc), anti_windup);
     }
-    else
-    {
-      u = duty_cycle * DAC_RANGE;
-    }
-    duty_cycle = u / DAC_RANGE;
-    saveToBuffer_dc(duty_cycle);
-    int pwm = (int)u;
-    analogWrite(LED_PIN, pwm);
-    my_pid.housekeep(r, y, anti_windup);
 
-    if (flag_stream_lux != 0) // Stream the led values (need to be implemented sending messages to other desks)
+    if (flag_stream_lux != 0) // strem lux values of the desk
     {
       Serial.print(0);
       Serial.print(" ");
@@ -67,16 +64,24 @@ void loop()
       Serial.print(" ");
       Serial.print(pwm);
       Serial.print(" ");
-      Serial.print("s");
+      /*Serial.print("s");
       Serial.print(" ");
       Serial.print("l");
-      Serial.print(" ");
+      Serial.print(" ");*/
       Serial.print(y);
       Serial.print(" ");
-      Serial.print(currentTime);
+      /*Serial.print(currentTime);
       Serial.println();
+      Serial.print(" ");*/
+      Serial.print(duty_cycle);
+      Serial.print(" ");
+      Serial.print(B);
+      Serial.print(" ");
+      Serial.print(K);
+      Serial.print(" ");
+      Serial.println(Ti);
     }
-    if (flag_stream_duty_c != 0)
+    if (flag_stream_duty_c != 0) // stream duty cycle values of the desk
     {
       Serial.print("s");
       Serial.print(" ");

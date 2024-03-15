@@ -8,7 +8,7 @@ public:
     explicit pid(float _h, float _K = 1, float b_ = 1, float Ti_ = 1, float Td_ = 0, float N_ = 10);
 
     ~pid(){};
-    float compute_control(float r, float y, int anti_windup, float h);
+    float compute_control(float K, float b, float Ti, float Td, float r, float y, int anti_windup, float h, int feedback);
 
     void housekeep(float r, float y, int anti_windup);
 };
