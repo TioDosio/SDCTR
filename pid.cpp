@@ -7,7 +7,7 @@ pid::pid(float _h, float _K, float b_,
 {
 }
 
-float pid::compute_control(float K, float b, float Ti, float Td, float r, float y, int anti_windup, float h, int feedback)
+float pid::compute_control(float K, float b, float Ti, float Td, float r, float y, int anti_windup, float h, int feedback,int bumpless)
 {
   if (feedback == 0)
   {
@@ -21,7 +21,9 @@ float pid::compute_control(float K, float b, float Ti, float Td, float r, float 
   else
   {
     D = 0;
+    if (bumpless == 1){
     I = I + Kold * (bold * r - y) - K * (b * r - y); // bumpless
+    }
     float P = K * (b * r - y);
     float v = P + I + D;
     float u = v;

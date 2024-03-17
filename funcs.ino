@@ -1,4 +1,4 @@
-double sum_visibility_error = 0, sum_flicker = 0, mean_flicker = 0, mean_visibility = 0, counter = 0;
+
 struct info
 {
     double lux;
@@ -41,11 +41,10 @@ double calibration()
     analogWrite(LED_PIN, 0);
     delay(2000);
     float external_lux = dac_lux(analogRead(ADC_PIN));
-    delay(1000);
     analogWrite(LED_PIN, 4095);
-    delay(2000);
+    delay(4000);
     float y_max = dac_lux(analogRead(ADC_PIN));
-    return (y_max - external_lux) / 1-0; // nao da
+    return (y_max - external_lux) / 1 - 0;
 }
 
 /*
@@ -70,7 +69,8 @@ float time_since_restart()
  */
 float average_energy_consumption(int desk) // do it in joule
 {
-    energy += power_max * duty_cycle * (run_time - run_init) * pow(10, -6);
+  Serial.println((currentTime - previousTime));
+    energy += power_max * duty_cycle * 0.01;
     return energy;
 }
 /*
@@ -92,49 +92,18 @@ void average_visibility_error(float r, float y) // accumulated visibility error 
 /*
  *   Function to compute the average flicker error
  */
-void average_flicker_error() // accumulated flicker error in Hz (s^-1)
+void average_flicker_error(double dc) // accumulated flicker error in Hz (s^-1)
 {
-    int aux1, aux2;
-    float f = 0;
-    if ((currentIndex - 1 < 0))
+    if (((dc - dc_1) * (dc_1 - dc_2)) < 0)
     {
-        aux1 = bufferSize - 1;
-        aux2 = bufferSize - 2;
+        sum_flicker += abs(dc - dc_1) + abs(dc_1 - dc_2);
     }
-    else if (currentIndex - 2 < 0)
-    {
-        aux1 = currentIndex - 1;
-        aux2 = bufferSize - 1;
-    }
-    else
-    {
-        aux1 = currentIndex - 1;
-        aux2 = currentIndex - 2;
-    }
+    mean_flicker = sum_flicker / counter * 1000; // ver que está em milis
 
-    if ((circularBuffer[currentIndex].d_cycle - circularBuffer[aux1].d_cycle) * (circularBuffer[aux1].d_cycle - circularBuffer[aux2].d_cycle) < 0)
-    {
-        f = abs(circularBuffer[currentIndex].d_cycle - circularBuffer[aux1].d_cycle) + abs(circularBuffer[aux1].d_cycle - circularBuffer[aux2].d_cycle);
-    }
-    mean_flicker = f / counter;
-    counter++;
+    dc_2 = dc_1;
+    dc_1 = dc;
 }
-/*
- * Function to compute the mean illuminance of the last 10 samples
- * @return the mean illuminance in lux
- */
-float mean_lux()
-{
-    int startIdx = (currentIndex - 10 + bufferSize) % bufferSize;
-    int endIdx = currentIndex;
-    float sum = 0;
 
-    for (int i = startIdx; i != endIdx; i = (i + 1) % bufferSize)
-    {
-        sum += circularBuffer[i].lux;
-    }
-    return sum / 10.0;
-}
 /*
  * Function to save the illuminance to the buffer
  */
@@ -147,7 +116,7 @@ void saveToBuffer_lux(double val)
  */
 void saveToBuffer_dc(double val)
 {
-    circularBuffer[currentIndex].lux = val;
+    circularBuffer[currentIndex].d_cycle = val;
     currentIndex = (currentIndex + 1) % bufferSize;
 }
 /*
@@ -155,7 +124,6 @@ void saveToBuffer_dc(double val)
  */
 void printBuffer(char c)
 {
-    Serial.println("Buffer Contents:");
     if (c == 'l')
     {
         for (int i = 0; i < bufferSize; i++)
@@ -191,6 +159,7 @@ void processCommand(const String &command)
         if (i == Led and val >= 0 and val <= 1) // não dá
         {
             duty_cycle = val;
+            flag_dc=1;
             Serial.println("ack");
         }
         else
@@ -218,6 +187,7 @@ void processCommand(const String &command)
         sscanf(command.c_str(), "r %d %f", &i, &val);
         if (i == Led and val >= 0)
         {
+            flag_dc=0;
             r = val;
             B = 1 / (K * ganho * (lux_volt(r, b, m, vcc) / r));
             float resistance = pow(10, (m * log10(r) + b));
@@ -350,8 +320,9 @@ void processCommand(const String &command)
         if (i == Led)
         {
             float ext = y - ganho * duty_cycle;
-            if (ext <0){
-              ext = 0;
+            if (ext < 0)
+            {
+                ext = 0;
             }
             Serial.print("x ");
             Serial.print(i);
@@ -370,7 +341,7 @@ void processCommand(const String &command)
             Serial.print("p ");
             Serial.print(i);
             Serial.print(" ");
-            Serial.println(imediate_power_cons());
+            Serial.println(imediate_power_cons()); // ver
         }
         else
         {
@@ -444,6 +415,7 @@ void processCommand(const String &command)
             Serial.print(x);
             Serial.print(" ");
             Serial.print(i);
+            Serial.print(" ");
             printBuffer('d');
         }
         else
@@ -477,7 +449,7 @@ void processCommand(const String &command)
     }
     else if (command.startsWith("g f ")) // Get the average flicker error on desk <i> since the last system restart.
     {
-        sscanf(command.c_str(), "g f %d", &i); // nao da
+        sscanf(command.c_str(), "g f %d", &i);
 
         Serial.print("f ");
         Serial.print(i);
@@ -488,6 +460,10 @@ void processCommand(const String &command)
     {
         sscanf(command.c_str(), "mudar %f", &K);
         B = 1 / (K * ganho * (lux_volt(r, b, m, vcc) / r));
+    }
+    else if (command.startsWith("m "))
+    {
+        sscanf(command.c_str(), "m %f", &m);
     }
     else
     {
