@@ -67,11 +67,10 @@ float time_since_restart()
  * Function to compute the average energy consumption of the luminaire
  * @return the energy consumption in joules
  */
-float average_energy_consumption(int desk) // do it in joule
+void average_energy_consumption(int desk) // do it in joule
 {
-  Serial.println((currentTime - previousTime));
     energy += power_max * duty_cycle * 0.01;
-    return energy;
+    mean_energy = energy/counter * 1000000; // micro joule
 }
 /*
  *   Function to compute the average visibility error
@@ -98,7 +97,7 @@ void average_flicker_error(double dc) // accumulated flicker error in Hz (s^-1)
     {
         sum_flicker += abs(dc - dc_1) + abs(dc_1 - dc_2);
     }
-    mean_flicker = sum_flicker / counter * 1000; // ver que está em milis
+    mean_flicker = sum_flicker / counter * 1000;
 
     dc_2 = dc_1;
     dc_1 = dc;
@@ -341,7 +340,7 @@ void processCommand(const String &command)
             Serial.print("p ");
             Serial.print(i);
             Serial.print(" ");
-            Serial.println(imediate_power_cons()); // ver
+            Serial.println(imediate_power_cons());
         }
         else
         {
@@ -431,7 +430,7 @@ void processCommand(const String &command)
             Serial.print("e ");
             Serial.print(i);
             Serial.print(" ");
-            Serial.println(average_energy_consumption(i));
+            Serial.println(mean_energy);
         }
         else
         {
